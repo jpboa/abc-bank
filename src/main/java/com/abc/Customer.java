@@ -2,6 +2,7 @@ package com.abc;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.lang.Math.abs;
 
@@ -28,51 +29,41 @@ public class Customer {
     }
 
     public double totalInterestEarned() {
-        double total = 0;
-        for (Account a : accounts)
-            total += a.interestEarned();
-        return total;
+        return accounts.stream().mapToDouble(account -> account.interestEarned()).sum();
     }
 
     public String getStatement() {
-        String statement = null;
-        statement = "Statement for " + name + "\n";
-        double total = 0.0;
-        for (Account a : accounts) {
-            statement += "\n" + statementForAccount(a) + "\n";
-            total += a.sumTransactions();
-        }
-        statement += "\nTotal In All Accounts " + toDollars(total);
-        return statement;
+        StringBuilder customerStatement = new StringBuilder("Statement for " + name + "\n");
+
+        Statement statement = accounts.stream()
+                .map(account -> {
+                    double accountTotal = account.sumTransactions();
+                    return new Statement("\n" + statementForAccount(account, accountTotal) + "\n", accountTotal);
+                })
+                .collect(StatementCollector::new, StatementCollector::accept, StatementCollector::combine).getStatement();
+
+        customerStatement.append(statement.getText());
+        customerStatement.append("\nTotal In All Accounts ").append(toDollars(statement.getTotal()));
+        return customerStatement.toString();
     }
 
-    private String statementForAccount(Account a) {
-        String s = "";
+    private String statementForAccount(Account account, double total) {
+        StringBuilder statement = new StringBuilder(account.getAccountName()).append("\n");
 
-       //Translate to pretty account type
-        switch(a.getAccountType()){
-            case Account.CHECKING:
-                s += "Checking Account\n";
-                break;
-            case Account.SAVINGS:
-                s += "Savings Account\n";
-                break;
-            case Account.MAXI_SAVINGS:
-                s += "Maxi Savings Account\n";
-                break;
-        }
+        statement.append(account.getTransactions().stream()
+                .map(t -> "  " + (t.getAmount() < 0 ? "withdrawal" : "deposit") + " " + toDollars(t.getAmount()) + "\n")
+                .collect(Collectors.joining()));
 
-        //Now total up all the transactions
-        double total = 0.0;
-        for (Transaction t : a.transactions) {
-            s += "  " + (t.amount < 0 ? "withdrawal" : "deposit") + " " + toDollars(t.amount) + "\n";
-            total += t.amount;
-        }
-        s += "Total " + toDollars(total);
-        return s;
+        statement.append("Total ").append(toDollars(total));
+        return statement.toString();
     }
 
-    private String toDollars(double d){
+    private String toDollars(double d) {
         return String.format("$%,.2f", abs(d));
+    }
+
+    public void transfer(double amount, Account checkingAccount, Account savingsAccount) {
+        checkingAccount.withdraw(amount);
+        savingsAccount.deposit(amount);
     }
 }
